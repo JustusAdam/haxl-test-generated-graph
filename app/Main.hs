@@ -1,13 +1,13 @@
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE RebindableSyntax #-}
+{-# LANGUAGE RebindableSyntax  #-}
 module Main where
 
-import Lib
-import Text.Printf
-import Control.Exception
-import System.CPUTime
-import Haxl.Prelude
-import Haxl.Core (runHaxl, initEnv, stateEmpty, stateSet)
+import           Control.Exception
+import           Haxl.Core         (initEnv, runHaxl, stateEmpty, stateSet)
+import           Haxl.Prelude
+import           Lib
+import           System.CPUTime
+import           Text.Printf
 
 
 

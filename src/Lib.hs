@@ -1,24 +1,25 @@
+{-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RebindableSyntax      #-}
 {-# LANGUAGE StandaloneDeriving    #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE RebindableSyntax #-}
 module Lib
     ( datasource
     , State(DataSourceState)
     ) where
 
 
-import           Control.Concurrent  (threadDelay)
-import           Data.Foldable       (for_)
+import           Control.Concurrent (threadDelay)
+import           Data.Foldable      (for_)
 import           Data.Hashable
 import           Data.Typeable
-import Haxl.Prelude
-import Text.Printf
-import Haxl.Core
+import           Haxl.Core
+import           Haxl.Prelude
+import           Text.Printf
 
 
 data MyDataSource a where
