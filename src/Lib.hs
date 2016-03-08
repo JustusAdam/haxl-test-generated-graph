@@ -7,10 +7,7 @@
 {-# LANGUAGE RebindableSyntax      #-}
 {-# LANGUAGE StandaloneDeriving    #-}
 {-# LANGUAGE TypeFamilies          #-}
-module Lib
-    ( datasource
-    , State(DataSourceState)
-    ) where
+module Lib where
 
 
 import           Control.Concurrent (threadDelay)
@@ -47,11 +44,14 @@ instance Hashable (MyDataSource a) where
     hashWithSalt s (GetSomething name k) = hashWithSalt s (0::Int, name, k)
 
 
-datasource name = dataFetch . GetSomething name
+getData name = dataFetch . GetSomething name
 
 getSomething :: a -> b -> c -> [BlockedFetch MyDataSource] -> PerformFetch
 getSomething _ _ _ reqs = SyncFetch $ do
-    printf "Fetch round with requests %v\n" (show (map (\(BlockedFetch fetch result) -> show fetch) reqs))
     for_ reqs $ \(BlockedFetch fetch result) ->
         putSuccess result $ case fetch of
                                 (GetSomething _ _) -> (0::Int)
+
+
+compute :: (Monad m, Foldable f) => f a -> m Int
+compute = return . length

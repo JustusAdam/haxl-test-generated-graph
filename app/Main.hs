@@ -1,15 +1,33 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE RebindableSyntax  #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Main where
 
 import           Control.Exception
-import           Haxl.Core         (initEnv, runHaxl, stateEmpty, stateSet)
-import           Haxl.Prelude
+import           Data.Aeson
+import           Data.Aeson.Types
+import qualified Data.ByteString.Lazy.Char8 as B
+import           Data.IORef
+import           Data.Traversable
+import           GHC.Generics
+import           Haxl.Core
 import           Lib
 import           System.CPUTime
+import           TestGraphs
 import           Text.Printf
 
 
+data MeasuredGraph = MeasuredGraph
+    { nr               :: Int
+    , levels           :: Int
+    , roundsMade       :: Int
+    , fetchesPerformed :: Int
+    } deriving (Generic, Show, Eq, Ord)
+
+
+type MeasuredGraphs = [MeasuredGraph]
+
+
+instance ToJSON MeasuredGraph where
+    toJSON = genericToJSON $ defaultOptions { fieldLabelModifier = camelTo '_' }
 
 
 time :: IO t -> IO t
@@ -22,29 +40,16 @@ time a = do
     return v
 
 
-somethingelse = return . length
-
-
-runTest :: IO Int
-runTest =
-    let
-        stateStore = stateSet DataSourceState stateEmpty
-    in do
-    myEnv <- initEnv stateStore ()
-    runHaxl myEnv $ do
-        six <- datasource "foo" [1000]
-        seven <- somethingelse [1000]
-        eight <- datasource "foo" [1000]
-        nine <- somethingelse [1000]
-        three <- somethingelse [1000, seven, nine]
-        four <- datasource "foo" [1000, seven, eight]
-        five <- datasource "foo" [1000, nine]
-        one <- datasource "foo" [1000, three, four, nine]
-        two <- somethingelse [1000, six, five]
-        somethingelse [1, one, two]
-
-
 main = do
-    putStrLn "Starting..."
-    time $ runTest >>= print
-    putStrLn "Done."
+    results <- for allTests $ \(function, currLevels, index) -> do
+        let stateStore = stateSet DataSourceState stateEmpty
+        myEnv <- initEnv stateStore ()
+        _ <- function myEnv
+        stats <- readIORef $ statsRef myEnv
+        return $ MeasuredGraph { nr = index
+                               , levels = currLevels
+                               , fetchesPerformed = numFetches stats
+                               , roundsMade = numRounds stats
+                               }
+
+    B.putStrLn (encode results)
