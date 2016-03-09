@@ -9,3 +9,5 @@
     - set `graphsToGenerate` to the amount of graphs you want to generate **per-level**
     - set `maxLevel` to the maximum level you want to generate graphs for.
 - Run the tests with `runhaskell scripts/RunTests.hs`
+
+Results will be written to `results/results.json`
