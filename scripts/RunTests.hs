@@ -17,7 +17,7 @@ default (T.Text)
 
 
 graphGenerationBinaryLocation :: FilePath
-graphGenerationBinaryLocation = "/Users/justusadam/projects/rand-code-graph/dist/build/random-level-graphs/random-level-graphs"
+graphGenerationBinaryLocation = "../rand-code-graph/dist/build/random-level-graphs/random-level-graphs"
 
 
 outputLocation :: FilePath
@@ -47,8 +47,9 @@ formatSeconds n
 
 
 main :: IO ()
-main = shelly $ print_stdout False $ do
+main = shelly $ print_stdout False $ escaping False $ do
     mkdir_p outputLocation
+    mkdir_p "generated"
 
     run "cabal" ["configure"]
     run "cabal" ["install", "--only-dependencies"]
@@ -66,6 +67,6 @@ main = shelly $ print_stdout False $ do
     echo $ T.pack $ printf "Generated %i graphs in %s" (graphsToGenerate * maxLevel) (formatSeconds $ ceiling generationTime)
     (compilationTime, _) <- time $ run "cabal" ["build"]
     echo $ T.pack $ printf "Compiled test program in %s" (formatSeconds $ ceiling compilationTime)
-    (runTime, _) <- time $ run "cabal" ["run"] >>=
+    (runTime, _) <- time $ run "dist/build/haxl-test-generated-graph-exe/haxl-test-generated-graph-exe" [] >>=
         writefile (outputLocation </> "results.json")
     echo $ T.pack $ printf "Ran program in %s" (formatSeconds $ ceiling runTime)
