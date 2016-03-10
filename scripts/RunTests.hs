@@ -1,3 +1,4 @@
+#!/usr/bin/env runhaskell
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
@@ -25,11 +26,11 @@ outputLocation = "results"
 
 
 graphsToGenerate :: Int
-graphsToGenerate = 5
+graphsToGenerate = 1
 
 
 maxLevel :: Int
-maxLevel = 3
+maxLevel = 5
 
 
 formatSeconds :: Int -> String
@@ -58,6 +59,21 @@ main = shelly $ print_stdout False $ escaping False $ do
 
     (generationTime, _) <- time $ run
         graphGenerationBinaryLocation
+        [ "-L", "HaskellDoApp"
+        , "-p", "resources/Preamble.hs"
+        , "-o", "generated/TestGraphs.hs"
+        , "-l", T.pack $ show maxLevel
+        , "-n", T.pack $ show (graphsToGenerate * maxLevel)
+        ]
+    echo $ T.pack $ printf "Generated %i graphs in %s" (graphsToGenerate * maxLevel) (formatSeconds $ ceiling generationTime)
+    (compilationTime, _) <- time $ run "cabal" ["build"]
+    echo $ T.pack $ printf "Compiled test program in %s" (formatSeconds $ ceiling compilationTime)
+    (runTime, _) <- time $ run "dist/build/haxl-test-generated-graph-exe/haxl-test-generated-graph-exe" [] >>=
+        writefile (outputLocation </> "haskell.json")
+    echo $ T.pack $ printf "Ran program in %s" (formatSeconds $ ceiling runTime)
+
+    (generationTime, _) <- time $ run
+        graphGenerationBinaryLocation
         [ "-L", "Haskell"
         , "-p", "resources/Preamble.hs"
         , "-o", "generated/TestGraphs.hs"
@@ -68,5 +84,5 @@ main = shelly $ print_stdout False $ escaping False $ do
     (compilationTime, _) <- time $ run "cabal" ["build"]
     echo $ T.pack $ printf "Compiled test program in %s" (formatSeconds $ ceiling compilationTime)
     (runTime, _) <- time $ run "dist/build/haxl-test-generated-graph-exe/haxl-test-generated-graph-exe" [] >>=
-        writefile (outputLocation </> "results.json")
+        writefile (outputLocation </> "haskell-applicative.json")
     echo $ T.pack $ printf "Ran program in %s" (formatSeconds $ ceiling runTime)

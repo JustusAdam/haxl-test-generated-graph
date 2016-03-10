@@ -11,4 +11,4 @@
     - set `maxLevel` to the maximum level you want to generate graphs for.
 - Run the tests with `runhaskell scripts/RunTests.hs`
 
-Results will be written to `results/results.json`
+Results will be written to `results/`, whereby `haskell.json` is the result of running the graphs with monadic Haskell, and `haskell-applicative.json` is the result of running the graphs in their applicative Haskell form.
