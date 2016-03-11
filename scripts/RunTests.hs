@@ -26,11 +26,15 @@ outputLocation = "results"
 
 
 graphsToGenerate :: Int
-graphsToGenerate = 1
+graphsToGenerate = 20
 
 
 maxLevel :: Int
-maxLevel = 5
+maxLevel = 20
+
+
+seed :: T.Text
+seed = "12345"
 
 
 formatSeconds :: Int -> String
@@ -46,7 +50,6 @@ formatSeconds n
         formatHours = (++ " hours" ) . show
 
 
-
 main :: IO ()
 main = shelly $ print_stdout False $ escaping False $ do
     mkdir_p outputLocation
@@ -59,11 +62,12 @@ main = shelly $ print_stdout False $ escaping False $ do
 
     (generationTime, _) <- time $ run
         graphGenerationBinaryLocation
-        [ "-L", "HaskellDoApp"
+        [ "-L", "HaskellDo"
         , "-p", "resources/Preamble.hs"
         , "-o", "generated/TestGraphs.hs"
         , "-l", T.pack $ show maxLevel
         , "-n", T.pack $ show (graphsToGenerate * maxLevel)
+        , "-s", seed
         ]
     echo $ T.pack $ printf "Generated %i graphs in %s" (graphsToGenerate * maxLevel) (formatSeconds $ ceiling generationTime)
     (compilationTime, _) <- time $ run "cabal" ["build"]
@@ -74,11 +78,12 @@ main = shelly $ print_stdout False $ escaping False $ do
 
     (generationTime, _) <- time $ run
         graphGenerationBinaryLocation
-        [ "-L", "Haskell"
+        [ "-L", "HaskellDoApp"
         , "-p", "resources/Preamble.hs"
         , "-o", "generated/TestGraphs.hs"
         , "-l", T.pack $ show maxLevel
         , "-n", T.pack $ show (graphsToGenerate * maxLevel)
+        , "-s", seed
         ]
     echo $ T.pack $ printf "Generated %i graphs in %s" (graphsToGenerate * maxLevel) (formatSeconds $ ceiling generationTime)
     (compilationTime, _) <- time $ run "cabal" ["build"]
