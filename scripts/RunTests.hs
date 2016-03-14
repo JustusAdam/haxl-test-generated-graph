@@ -55,7 +55,6 @@ main = shelly $ print_stdout False $ escaping False $ do
     mkdir_p outputLocation
     mkdir_p "generated"
 
-    run "cabal" ["configure"]
     run "cabal" ["install", "--only-dependencies"]
 
     echo $ T.pack $ printf "Building and testing %i graphs" (graphsToGenerate * maxLevel)
