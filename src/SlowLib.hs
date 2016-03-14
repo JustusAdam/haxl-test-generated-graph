@@ -33,7 +33,6 @@ delayFactor = 100000
 
 data MyDataSource a where
     GetSomething :: String -> [Int] -> MyDataSource Int
-    GetSomethingSlow :: String -> [Int] -> MyDataSource Int
     deriving Typeable
 
 
@@ -55,23 +54,53 @@ instance DataSource u MyDataSource where
 
 instance Hashable (MyDataSource a) where
     hashWithSalt s (GetSomething name k) = hashWithSalt s (0::Int, name, k)
-    hashWithSalt s (GetSomethingSlow name k) = hashWithSalt s (2::Int, name, k)
 
 
 getData name = dataFetch . GetSomething name
-slowGetData name = dataFetch . GetSomethingSlow name
 
 getSomething :: a -> b -> c -> [BlockedFetch MyDataSource] -> PerformFetch
 getSomething _ _ _ reqs = AsyncFetch $ \other -> do
     m <- async other
-    for_ reqs $ \(BlockedFetch fetch result) ->
-        putSuccess result =<< case fetch of
-                                (GetSomething _ _) -> do
-                                    threadDelay $ fastDelay * delayFactor
-                                    return (0::Int)
-                                (GetSomethingSlow _ _) -> do
-                                    threadDelay $ slowDelay * delayFactor
-                                    return (0::Int)
+    threadDelay $ fastDelay * delayFactor
+    for_ reqs $ \(BlockedFetch fetch result) -> do
+        putSuccess result $ case fetch of
+                                (GetSomething _ _) -> (0::Int)
+    wait m
+
+
+data MySlowDataSource a where
+    GetSomethingSlow :: String -> [Int] -> MySlowDataSource Int
+    deriving Typeable
+
+
+deriving instance Eq (MySlowDataSource a)
+deriving instance Show (MySlowDataSource a)
+instance Show1 MySlowDataSource where show1 = show
+
+
+instance DataSourceName MySlowDataSource where
+    dataSourceName _ = "MySlowDataSource"
+
+
+instance StateKey MySlowDataSource where
+    data State MySlowDataSource = SlowDataSourceState
+
+
+instance DataSource u MySlowDataSource where
+    fetch = getSomethingSlow
+
+instance Hashable (MySlowDataSource a) where
+    hashWithSalt s (GetSomethingSlow name k) = hashWithSalt s (2::Int, name, k)
+
+slowGetData name = dataFetch . GetSomethingSlow name
+
+getSomethingSlow :: a -> b -> c -> [BlockedFetch MySlowDataSource] -> PerformFetch
+getSomethingSlow _ _ _ reqs = AsyncFetch $ \other -> do
+    m <- async other
+    threadDelay $ slowDelay * delayFactor
+    for_ reqs $ \(BlockedFetch fetch result) -> do
+        putSuccess result $ case fetch of
+                                (GetSomethingSlow _ _) -> (0::Int)
     wait m
 
 

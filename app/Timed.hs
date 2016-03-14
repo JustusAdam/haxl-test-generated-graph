@@ -36,7 +36,7 @@ timeExec a = do
 
 main = do
     results <- for allTests $ \(function, currLevels, index) -> do
-        let stateStore = stateSet DataSourceState stateEmpty
+        let stateStore = stateSet SlowDataSourceState $ stateSet DataSourceState stateEmpty
         myEnv <- initEnv stateStore ()
         (_, execTime) <- timeExec $ function myEnv
         return $ TimedGraph { levels = currLevels
