@@ -53,5 +53,5 @@ getSomething _ _ _ reqs = SyncFetch $ do
                                 (GetSomething _ _) -> (0::Int)
 
 
-compute :: (Monad m, Foldable f) => f a -> m Int
+compute :: Monad m => [a] -> m Int
 compute = return . length

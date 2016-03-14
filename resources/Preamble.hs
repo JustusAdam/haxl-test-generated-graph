@@ -5,4 +5,4 @@ module TestGraphs where
 import           Haxl.Core
 import           Haxl.Prelude
 import           Lib
-import Prelude hiding ((>>))
+import           Prelude      hiding ((>>))

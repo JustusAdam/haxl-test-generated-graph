@@ -1,17 +1,17 @@
 #!/usr/bin/env runhaskell
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
+{-# LANGUAGE OverloadedStrings    #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 module RunTests where
 
 
-import Shelly
-import qualified Data.Text as T
-import Control.Monad
-import Data.Monoid
-import Prelude hiding (FilePath)
-import Text.Printf
-import Data.Foldable (for_)
+import           Control.Monad
+import           Data.Foldable (for_)
+import           Data.Monoid
+import qualified Data.Text     as T
+import           Prelude       hiding (FilePath)
+import           Shelly
+import           Text.Printf
 
 
 default (T.Text)

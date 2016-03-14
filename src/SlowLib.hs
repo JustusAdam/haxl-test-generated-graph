@@ -10,15 +10,15 @@
 module SlowLib where
 
 
-import           Control.Concurrent (threadDelay)
-import           Data.Foldable      (for_)
+import           Control.Concurrent       (threadDelay)
+import           Control.Concurrent.Async (async, wait)
+import           Data.Foldable            (for_)
 import           Data.Hashable
 import           Data.Typeable
 import           Haxl.Core
 import           Haxl.Prelude
+import           System.IO
 import           Text.Printf
-import Control.Concurrent.Async (async, wait)
-import System.IO
 
 
 fastDelay :: Int
@@ -104,5 +104,5 @@ getSomethingSlow _ _ _ reqs = AsyncFetch $ \other -> do
     wait m
 
 
-compute :: (Monad m, Foldable f) => f a -> m Int
+compute :: Monad m => [a] -> m Int
 compute = return . length

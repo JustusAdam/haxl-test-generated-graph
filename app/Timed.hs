@@ -6,19 +6,19 @@ import           Data.Aeson
 import           Data.Aeson.Types
 import qualified Data.ByteString.Lazy.Char8 as B
 import           Data.IORef
+import           Data.Time
 import           Data.Traversable
 import           GHC.Generics
 import           Haxl.Core
 import           SlowLib
-import           System.CPUTime
 import           SlowTestGraphs
+import           System.CPUTime
 import           Text.Printf
-import Data.Time
 
 
 data TimedGraph = TimedGraph
     { levels :: Int
-    , time :: Double
+    , time   :: Double
     } deriving (Eq, Ord, Show, Generic)
 
 instance ToJSON TimedGraph where
