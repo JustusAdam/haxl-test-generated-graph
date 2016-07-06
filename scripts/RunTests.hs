@@ -108,5 +108,5 @@ main = shelly $ print_stdout False $ escaping False $ do
 
     run "cabal" ["install", "--only-dependencies"]
 
-    runOne "HaskellDo"
-    runOne "HaskellDoApp"
+    runOne "HaxlDo"
+    runOne "HaxlDoApp"
