@@ -62,6 +62,7 @@ runOne type_ = do
         , "-l", T.pack $ show maxLevel
         , "-n", T.pack $ show (graphsToGenerate * maxLevel)
         , "-s", seed
+        , "--percentageifs", "1"
         ]
     files <- fmap catMaybes $ (filter (not . (`elem` [".", ".."])) <$> lsT genPath) >>= mapM (\filepath ->
         case Re.scan graphFilesRegex filepath of
