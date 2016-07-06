@@ -165,7 +165,7 @@ main = shelly $ print_stdout False $ escaping False $ do
 
     run "cabal" ["install", "--only-dependencies"]
 
-    -- runOne "HaxlDo"
-    -- runOne "HaxlDoApp"
+    runOne "HaxlDo"
+    runOne "HaxlDoApp"
     runOneFunc "HaxlDo"
     runOneFunc "HaxlDoApp"
