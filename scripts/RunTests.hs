@@ -131,7 +131,7 @@ runOne style = do
     pream <- readfile "resources/Preamble.hs"
     let allTests :: T.Text
         allTests =
-               "allTests :: [(Env u -> IO Int, Int, Int)]\n"
+               "allTests :: [(Env () -> IO Int, Int, Int)]\n"
             <> "allTests = [(" ++ T.intercalate "), (" (map (\(name, level, index) -> T.intercalate "," [name, level, index]) functions) ++ ")]"
     let fullContent = T.intercalate "\n" $ pream:allTests:code :: T.Text
     writefile (genPath </> "TestGraphs.hs") fullContent
