@@ -50,19 +50,75 @@ seed :: T.Text
 seed = "12345"
 
 
-runOne :: T.Text -> Sh ()
-runOne type_ = do
+data ExpType = If | Func deriving Show
+
+
+before :: T.Text
+before = "{-# LANGUAGE NoImplicitPrelude #-}\n\
+          \{-# LANGUAGE RebindableSyntax  #-}"
+after :: T.Text
+after = "import           Haxl.Core\n\
+         \import           Haxl.Prelude\n\
+         \import           Lib\n\
+         \import           Prelude      hiding ((>>))\n"
+
+
+runOneFunc :: T.Text -> Sh ()
+runOneFunc style = do
     echo $ T.pack $ printf "Building and testing %i graphs" (graphsToGenerate * maxLevel)
     let genPath = "generated"
     ls genPath >>= mapM_ (\x -> echo ("removing " <> T.pack (show x)) >> rm x) . filter (not . (`elem` [".", ".."]))
     (generationTime, _) <- time $ run
         graphGenerationBinaryLocation
-        [ "-L", type_
+        [ "-L", style
         , "-o", "generated/"
         , "-l", T.pack $ show maxLevel
         , "-n", T.pack $ show (graphsToGenerate * maxLevel)
         , "-s", seed
-        , "--percentageifs", "1"
+        , "--percentageifs", "0.3"
+        , "--percentagefuns",  "0.3"
+        ]
+    pream <- readfile "resources/Preamble.hs"
+    functions <- fmap catMaybes $ (filter (not . (`elem` [".", ".."])) <$> lsT genPath) >>= mapM (\filepath ->
+        case Re.scan graphFilesRegex filepath of
+            [(_, [funname, level, index])] -> do
+                content <- readfile $ fromString $ T.unpack filepath
+                let modname = "M" ++ funname
+                let fullCode = T.intercalate "\n" [before, "module " ++ modname ++ " where\n", after, content]
+                writefile (fromString $ T.unpack $ "generated/" ++ modname ++ ".hs") fullCode
+                return $ Just $ (modname, funname, level, index :: T.Text)
+            _ -> return Nothing
+        )
+    let imports = T.intercalate "\n" $ map (\(modname, _, _, _) -> "import qualified " ++ modname) functions
+    let allTests :: T.Text
+        allTests =
+               "allTests :: [(Env () -> IO Int, Int, Int)]\n"
+            <> "allTests = [(" ++ T.intercalate "), (" (map (\(modname, name, level, index) -> T.intercalate "," [modname ++ "." ++ name, level, index]) functions) ++ ")]"
+    let fullContent = T.intercalate "\n" [pream, imports, allTests]
+    writefile (genPath </> "TestGraphs.hs") fullContent
+
+
+    echo $ T.pack $ printf "Generated %i graphs in %s" (graphsToGenerate * maxLevel) (formatSeconds $ ceiling generationTime)
+    (compilationTime, _) <- time $ run "cabal" ["build", "haxl-test-generated-graph-exe"]
+    echo $ T.pack $ printf "Compiled test program in %s" (formatSeconds $ ceiling compilationTime)
+    (runTime, _) <- time $ run "./dist/build/haxl-test-generated-graph-exe/haxl-test-generated-graph-exe" [] >>=
+        writefile (outputLocation </> fromString ("haskell-func-" ++ T.unpack style) <.>"json")
+    echo $ T.pack $ printf "Ran program in %s" (formatSeconds $ ceiling runTime)
+
+
+runOne :: T.Text -> Sh ()
+runOne style = do
+    echo $ T.pack $ printf "Building and testing %i graphs" (graphsToGenerate * maxLevel)
+    let genPath = "generated"
+    ls genPath >>= mapM_ (\x -> echo ("removing " <> T.pack (show x)) >> rm x) . filter (not . (`elem` [".", ".."]))
+    (generationTime, _) <- time $ run
+        graphGenerationBinaryLocation
+        [ "-L", style
+        , "-o", "generated/"
+        , "-l", T.pack $ show maxLevel
+        , "-n", T.pack $ show (graphsToGenerate * maxLevel)
+        , "-s", seed
+        ,"--percentageifs", "1"
         ]
     files <- fmap catMaybes $ (filter (not . (`elem` [".", ".."])) <$> lsT genPath) >>= mapM (\filepath ->
         case Re.scan graphFilesRegex filepath of
@@ -84,7 +140,7 @@ runOne type_ = do
     (compilationTime, _) <- time $ run "cabal" ["build", "haxl-test-generated-graph-exe"]
     echo $ T.pack $ printf "Compiled test program in %s" (formatSeconds $ ceiling compilationTime)
     (runTime, _) <- time $ run "./dist/build/haxl-test-generated-graph-exe/haxl-test-generated-graph-exe" [] >>=
-        writefile (outputLocation </> fromString ("haskell-" ++ T.unpack type_) <.>"json")
+        writefile (outputLocation </> fromString ("haskell-if-" ++ T.unpack style) <.>"json")
     echo $ T.pack $ printf "Ran program in %s" (formatSeconds $ ceiling runTime)
 
 
@@ -109,5 +165,7 @@ main = shelly $ print_stdout False $ escaping False $ do
 
     run "cabal" ["install", "--only-dependencies"]
 
-    runOne "HaxlDo"
-    runOne "HaxlDoApp"
+    -- runOne "HaxlDo"
+    -- runOne "HaxlDoApp"
+    runOneFunc "HaxlDo"
+    runOneFunc "HaxlDoApp"
