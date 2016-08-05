@@ -70,7 +70,7 @@ data GenConf = MkGenConf
     , seed      :: Maybe Int
     , prctFuns  :: Maybe Float
     , prctMaps  :: Maybe Float
-    , prctIf    :: Maybe Float
+    , prctIfs    :: Maybe Float
     } deriving (Generic, Show, Eq, Ord)
 
 
@@ -78,7 +78,7 @@ baseConf = MkGenConf
     { numLevels = 7
     , numGraphs = 7*5
     , seed = Just 123456
-    , prctIf = Nothing
+    , prctIfs = Nothing
     , prctFuns = Nothing
     , prctMaps = Nothing
     }
@@ -140,7 +140,7 @@ runOneFunc expName toGen = do
               ++ mParam "-s" (seed conf)
               ++ mParam "--percentagefuns" (prctFuns conf)
               ++ mParam "--percentagemaps" (prctMaps conf)
-              ++ mParam "--percentageif" (prctIf conf)
+              ++ mParam "--percentageif" (prctIfs conf)
         generated <- filter (not . (`elem` [".", ".."])) <$> lsT genPath
         for generated $ \mname ->
             case Re.scan graphFilesRegex mname of
@@ -196,6 +196,7 @@ main = do
                                                         | myseed <- [123456, 234567]
                                                         , percentage <- [0.1, 0.2, 0.3, 0.4]
                                                         ]
+                    "if" -> runOneFunc "haskell-if" [baseConf {lang="HaxlDoApp", prctIfs=Just 0.5}]
 
     shelly $ print_stdout False $ escaping False $ do
         mkdir_p outputLocation
