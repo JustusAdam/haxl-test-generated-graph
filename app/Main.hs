@@ -16,10 +16,10 @@ import           Text.Printf
 
 
 data MeasuredGraph = MeasuredGraph
-    { nr               :: Int
-    , levels           :: Int
-    , roundsMade       :: Int
-    , fetchesPerformed :: Int
+    { nr      :: Int
+    , levels  :: Int
+    , rounds  :: Int
+    , fetches :: Int
     } deriving (Generic, Show, Eq, Ord)
 
 
@@ -48,8 +48,8 @@ main = do
         stats <- readIORef $ statsRef myEnv
         return $ MeasuredGraph { nr = index
                                , levels = currLevels
-                               , fetchesPerformed = numFetches stats
-                               , roundsMade = numRounds stats
+                               , fetches = numFetches stats
+                               , rounds = numRounds stats
                                }
 
     B.putStrLn (encode results)
