@@ -20,7 +20,7 @@ import qualified Data.Text             as T
 import           Data.Text.Encoding    (decodeUtf8, encodeUtf8)
 import           Data.Traversable      (for)
 import           Debug.Trace
-import           Experiment.Haxl.Types
+import           Experiment.Haxl.Types hiding (time)
 import           GHC.Generics
 import           Prelude               hiding (FilePath, (++))
 import           Shelly                as Shelly
@@ -149,7 +149,9 @@ formatSeconds n
         formatHours :: Int -> String
         formatHours = (++ " hours" ) . show
 
-if_conf = [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctIfs=Just percentage}
+basePrctConf = baseConf { numGraphs = 1, numLevels = 10 }
+
+if_conf = [ basePrctConf {lang="HaxlDoApp", seed=Just myseed, prctIfs=Just percentage}
           | myseed <- [123456, 234567]
           , percentage <- [0.1, 0.2, 0.3, 0.4]
           ]
@@ -159,11 +161,11 @@ delayed = map (\c -> c { slowDataSource = Just True}) if_conf
 experiments =
     [ ("if", runOneFunc "haskell-if" if_conf)
     , ("if-delayed", runOneFunc "haskell-if-delayed" delayed)
-    , ("map", runOneFunc "haskell-map" [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctMaps=Just percentage}
+    , ("map", runOneFunc "haskell-map" [ basePrctConf { lang="HaxlDoApp", seed=Just myseed, prctMaps=Just percentage}
                                        | myseed <- [123456, 234567]
                                        , percentage <- [0.1, 0.2, 0.3, 0.4]
                                        ])
-    , ("func",  runOneFunc "haskell-func" [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctFuns=Just percentage}
+    , ("func",  runOneFunc "haskell-func" [ basePrctConf { lang="HaxlDoApp", seed=Just myseed, prctFuns=Just percentage}
                                           | myseed <- [123456, 234567]
                                           , percentage <- [0.1, 0.2, 0.3, 0.4]
                                           ])
