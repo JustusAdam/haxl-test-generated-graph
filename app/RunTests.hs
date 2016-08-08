@@ -1,17 +1,18 @@
-#!/usr/bin/env runhaskell
-{-# LANGUAGE DeriveGeneric, TupleSections        #-}
+{-# LANGUAGE BangPatterns         #-}
+{-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
-{-# LANGUAGE OverloadedStrings, BangPatterns    #-}
+{-# LANGUAGE LambdaCase           #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE TupleSections        #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
-module RunTests where
 
 
 import           Control.Exception
 import           Control.Monad
 import           Data.Aeson
-import           Data.Aeson.Types
 import qualified Data.ByteString.Lazy  as B
 import           Data.Foldable         (for_)
+import           Data.List             (stripPrefix)
 import           Data.Maybe
 import           Data.Monoid
 import           Data.String           (fromString)
@@ -19,14 +20,14 @@ import qualified Data.Text             as T
 import           Data.Text.Encoding    (decodeUtf8, encodeUtf8)
 import           Data.Traversable      (for)
 import           Debug.Trace
+import           Experiment.Haxl.Types
 import           GHC.Generics
 import           Prelude               hiding (FilePath, (++))
 import           Shelly                as Shelly
+import           System.Environment    (getArgs)
 import           Text.Printf
 import qualified Text.Regex.PCRE.Heavy as Re
 import qualified Text.Regex.PCRE.Light as Re
-import Data.List (stripPrefix)
-import System.Environment (getArgs)
 
 
 default (T.Text)
@@ -38,40 +39,10 @@ graphFilesRegex :: Re.Regex
 graphFilesRegex = Re.compile "(run_test_level(\\d+)_(\\d+)).hs$" []
 
 graphGenerationBinaryLocation :: FilePath
-graphGenerationBinaryLocation = "../rand-code-graph/.stack-work/install/x86_64-osx/lts-6.4/7.10.3/bin/random-level-graphs"
+graphGenerationBinaryLocation = "random-level-graphs"
 
 outputLocation :: FilePath
 outputLocation = "results"
-
-
-data MeasuredGraph = MeasuredGraph
-    { nr               :: Maybe Int
-    , levels           :: Int
-    , rounds       :: Int
-    , fetches :: Int
-    , genConf          :: Maybe GenConf
-    } deriving (Generic, Show, Eq, Ord)
-
-
-type MeasuredGraphs = [MeasuredGraph]
-
-
-instance ToJSON MeasuredGraph where
-    toJSON = genericToJSON $ defaultOptions { fieldLabelModifier = camelTo '_' }
-
-instance FromJSON MeasuredGraph where
-    parseJSON = genericParseJSON $ defaultOptions { fieldLabelModifier = camelTo '_' }
-
-
-data GenConf = MkGenConf
-    { lang      :: T.Text
-    , numLevels :: Int
-    , numGraphs :: Int
-    , seed      :: Maybe Int
-    , prctFuns  :: Maybe Float
-    , prctMaps  :: Maybe Float
-    , prctIfs    :: Maybe Float
-    } deriving (Generic, Show, Eq, Ord)
 
 
 baseConf = MkGenConf
@@ -81,28 +52,8 @@ baseConf = MkGenConf
     , prctIfs = Nothing
     , prctFuns = Nothing
     , prctMaps = Nothing
+    , slowDataSource = Nothing
     }
-
-
-rewritePrefixes :: [(String, String)] -> (String -> String) -> String -> String
-rewritePrefixes [] inner source = inner source
-rewritePrefixes ((trigger, target):xs) inner source =
-    maybe (rewritePrefixes xs inner source) ((target ++) . inner) $ stripPrefix trigger source
-
-
-gconfPrefixTrans :: [(String, String)]
-gconfPrefixTrans =
-    [ ("prct", "%")
-    , ("num", "#")
-    ]
-
-gconfOptions = defaultOptions {fieldLabelModifier= rewritePrefixes gconfPrefixTrans (camelTo '_')}
-
-instance ToJSON GenConf where
-    toJSON = genericToJSON gconfOptions
-
-instance FromJSON GenConf where
-    parseJSON = genericParseJSON gconfOptions
 
 
 before :: T.Text
@@ -128,7 +79,7 @@ runOneFunc expName toGen = do
     -- echo $ T.pack $ printf "Building and testing %i graphs" (graphsToGenerate * maxLevel)
     let genPath = "generated"
     ls genPath >>= mapM_ rm . filter (not . (`elem` [".", ".."]))
-    pream <- readfile "resources/Preamble.hs"
+    pream <- readfile "../resources/Preamble.hs"
     (confs, functions) <- unzip . catMaybes . concat <$> for (zip toGen [1..]) (\(conf, globalIndex) -> do
         run
             graphGenerationBinaryLocation
@@ -141,6 +92,9 @@ runOneFunc expName toGen = do
               ++ mParam "--percentagefuns" (prctFuns conf)
               ++ mParam "--percentagemaps" (prctMaps conf)
               ++ mParam "--percentageif" (prctIfs conf)
+              ++ case slowDataSource conf of
+                    Just True -> ["-S"]
+                    _ -> []
         generated <- filter (not . (`elem` [".", ".."])) <$> lsT genPath
         for generated $ \mname ->
             case Re.scan graphFilesRegex mname of
@@ -161,9 +115,9 @@ runOneFunc expName toGen = do
     writefile (genPath </> "TestGraphs.hs") fullContent
 
     -- echo $ T.pack $ printf "Generated %i graphs in %s" (graphsToGenerate * maxLevel) (formatSeconds $ ceiling generationTime)
-    (compilationTime, _) <- time $ run "cabal" ["build", "haxl-test-generated-graph-exe"]
+    (compilationTime, _) <- time $ run "stack" ["build"]
     echo $ T.pack $ printf "Compiled test program in %s" (formatSeconds $ ceiling compilationTime)
-    rawData <- run "./dist/build/haxl-test-generated-graph-exe/haxl-test-generated-graph-exe" []
+    rawData <- run "stack" ["exec", "inner-app-exe"]
 
     let jsonData = fromMaybe (error "json unreadable") $ decode $ B.fromStrict $ encodeUtf8 rawData
 
@@ -189,16 +143,25 @@ formatSeconds n
 main :: IO ()
 main = do
     [type_] <- getArgs
-
-    let !action = case type_ of
-                    "map" -> runOneFunc "haskell-map" [baseConf {lang="HaxlDoApp", prctMaps=Just 0.4}]
+    let if_conf = [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctIfs=Just percentage}
+                  | myseed <- [123456, 234567]
+                  , percentage <- [0.1, 0.2, 0.3, 0.4]
+                  ]
+        delayed = map (\c -> c { slowDataSource = Just True}) if_conf
+        !action = case type_ of
+                    "if" -> runOneFunc "haskell-if" if_conf
+                    "if-delayed" -> runOneFunc "haskell-if-delayed" delayed
+                    "map" -> runOneFunc "haskell-map" [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctMaps=Just percentage}
+                                                      | myseed <- [123456, 234567]
+                                                      , percentage <- [0.1, 0.2, 0.3, 0.4]
+                                                      ]
                     "func" -> runOneFunc "haskell-func" [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctFuns=Just percentage}
                                                         | myseed <- [123456, 234567]
                                                         , percentage <- [0.1, 0.2, 0.3, 0.4]
                                                         ]
-                    "if" -> runOneFunc "haskell-if" [baseConf {lang="HaxlDoApp", prctIfs=Just 0.5}]
 
     shelly $ print_stdout False $ escaping False $ do
+        cd "inner-app"
         mkdir_p outputLocation
         mkdir_p "generated"
 
