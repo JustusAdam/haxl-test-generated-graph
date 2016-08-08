@@ -1,10 +1,6 @@
 name:                inner-app
 version:             0.1.0.0
 synopsis:            Initial project template from stack
-description:         Please see README.md
-homepage:            http://github.com/JustusAdam/haxl-test-generated-graph#readme
-license:             BSD3
-license-file:        LICENSE
 author:              JustusAdam
 maintainer:          dev@justus.science
 copyright:           Copyright: (c) 2016 Justus Adam
@@ -34,6 +30,7 @@ executable inner-app-exe
                      , haxl
                      , bytestring
                      , aeson
+                     , time
   default-language:    Haskell2010
 
 

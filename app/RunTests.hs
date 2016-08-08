@@ -42,7 +42,7 @@ graphGenerationBinaryLocation :: FilePath
 graphGenerationBinaryLocation = "random-level-graphs"
 
 outputLocation :: FilePath
-outputLocation = "results"
+outputLocation = "../results"
 
 
 baseConf = MkGenConf
@@ -66,6 +66,13 @@ after = "import           Haxl.Core\n\
          \import           Prelude      hiding ((>>), mapM)\n"
 
 
+slowAfter :: T.Text
+slowAfter = "import           Haxl.Core\n\
+            \import           Haxl.Prelude\n\
+            \import           SlowLib\n\
+            \import           Prelude      hiding ((>>), mapM)\n"
+
+
 mParam :: Show a => T.Text -> Maybe a -> [T.Text]
 mParam name = maybe [] (\v -> [name, showt v])
 
@@ -81,6 +88,9 @@ runOneFunc expName toGen = do
     ls genPath >>= mapM_ rm . filter (not . (`elem` [".", ".."]))
     pream <- readfile "../resources/Preamble.hs"
     (confs, functions) <- unzip . catMaybes . concat <$> for (zip toGen [1..]) (\(conf, globalIndex) -> do
+        let useSlow = case slowDataSource conf of
+                        Just True -> True
+                        _ -> False
         run
             graphGenerationBinaryLocation
             $ [ "-L", lang conf
@@ -101,7 +111,7 @@ runOneFunc expName toGen = do
                 [(_, [funname, level, index])] -> do
                     content <- readfile $ fromString $ T.unpack mname
                     let modname = "M" ++ funname ++ "_" ++ T.pack (show (globalIndex :: Int))
-                    let fullCode = T.intercalate "\n" [before, "module " ++ modname ++ " where\n", after, content]
+                    let fullCode = T.intercalate "\n" [before, "module " ++ modname ++ " where\n", if useSlow then slowAfter else after, content]
                     writefile (fromString $ T.unpack $ "generated/" ++ modname ++ ".hs") fullCode
                     return $ Just $ (conf, ) $ (modname, funname, level, index :: T.Text)
                 _ -> return Nothing
@@ -139,32 +149,40 @@ formatSeconds n
         formatHours :: Int -> String
         formatHours = (++ " hours" ) . show
 
+if_conf = [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctIfs=Just percentage}
+          | myseed <- [123456, 234567]
+          , percentage <- [0.1, 0.2, 0.3, 0.4]
+          ]
+delayed = map (\c -> c { slowDataSource = Just True}) if_conf
+
+
+experiments =
+    [ ("if", runOneFunc "haskell-if" if_conf)
+    , ("if-delayed", runOneFunc "haskell-if-delayed" delayed)
+    , ("map", runOneFunc "haskell-map" [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctMaps=Just percentage}
+                                       | myseed <- [123456, 234567]
+                                       , percentage <- [0.1, 0.2, 0.3, 0.4]
+                                       ])
+    , ("func",  runOneFunc "haskell-func" [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctFuns=Just percentage}
+                                          | myseed <- [123456, 234567]
+                                          , percentage <- [0.1, 0.2, 0.3, 0.4]
+                                          ])
+    , ("all", mapM_ snd (filter ((/= "all") . fst) experiments))
+    ]
+
 
 main :: IO ()
 main = do
-    [type_] <- getArgs
-    let if_conf = [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctIfs=Just percentage}
-                  | myseed <- [123456, 234567]
-                  , percentage <- [0.1, 0.2, 0.3, 0.4]
-                  ]
-        delayed = map (\c -> c { slowDataSource = Just True}) if_conf
-        !action = case type_ of
-                    "if" -> runOneFunc "haskell-if" if_conf
-                    "if-delayed" -> runOneFunc "haskell-if-delayed" delayed
-                    "map" -> runOneFunc "haskell-map" [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctMaps=Just percentage}
-                                                      | myseed <- [123456, 234567]
-                                                      , percentage <- [0.1, 0.2, 0.3, 0.4]
-                                                      ]
-                    "func" -> runOneFunc "haskell-func" [ baseConf {numLevels=20, numGraphs=1, lang="HaxlDoApp", seed=Just myseed, prctFuns=Just percentage}
-                                                        | myseed <- [123456, 234567]
-                                                        , percentage <- [0.1, 0.2, 0.3, 0.4]
-                                                        ]
+    types <- getArgs
 
     shelly $ print_stdout False $ escaping False $ do
         cd "inner-app"
         mkdir_p outputLocation
         mkdir_p "generated"
 
-        run "cabal" ["install", "--only-dependencies"]
+        run "stack" ["install", "--only-dependencies"]
 
-        action
+        for_ types $ \exp ->
+            case lookup exp experiments of
+                Nothing -> echo $ "No experiment " ++ T.pack exp ++ " defined"
+                Just action -> action

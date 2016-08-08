@@ -42,7 +42,7 @@ instance Show1 MyDataSource where show1 = show
 
 
 instance DataSourceName MyDataSource where
-    dataSourceName _ = "MyDataSource"
+    dataSourceName _ = "SlowLib.MyDataSource"
 
 
 instance StateKey MyDataSource where
@@ -79,7 +79,7 @@ instance Show1 MySlowDataSource where show1 = show
 
 
 instance DataSourceName MySlowDataSource where
-    dataSourceName _ = "MySlowDataSource"
+    dataSourceName _ = "SlowLib.MySlowDataSource"
 
 
 instance StateKey MySlowDataSource where

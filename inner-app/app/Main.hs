@@ -9,10 +9,14 @@ import           Data.IORef
 import           Data.Traversable
 import           GHC.Generics
 import           Haxl.Core
-import           Lib
+import qualified Lib
+import qualified SlowLib
 import           System.CPUTime
 import           TestGraphs
 import           Text.Printf
+import           Data.Time
+import Data.Function ((&))
+
 
 
 data MeasuredGraph = MeasuredGraph
@@ -20,6 +24,7 @@ data MeasuredGraph = MeasuredGraph
     , levels  :: Int
     , rounds  :: Int
     , fetches :: Int
+    , time :: Double
     } deriving (Generic, Show, Eq, Ord)
 
 
@@ -27,29 +32,32 @@ type MeasuredGraphs = [MeasuredGraph]
 
 
 instance ToJSON MeasuredGraph where
-    toJSON = genericToJSON $ defaultOptions { fieldLabelModifier = camelTo '_' }
+    toJSON = genericToJSON $ defaultOptions { fieldLabelModifier = camelTo2 '_' }
 
 
-time :: IO t -> IO t
-time a = do
-    start <- getCPUTime
+timeExec :: IO t -> IO (t, Double)
+timeExec a = do
+    start <- getCurrentTime
     v <- a
-    end   <- getCPUTime
-    let diff = (fromIntegral (end - start)) / (10^12)
-    printf "Computation time: %0.3f sec\n" (diff :: Double)
-    return v
+    end   <- getCurrentTime
+    let diff = realToFrac $ diffUTCTime end start
+    return (v, diff * 1000)
 
 
 main = do
     results <- for allTests $ \(function, currLevels, index) -> do
-        let stateStore = stateSet DataSourceState stateEmpty
+        let stateStore = stateEmpty
+                         & stateSet SlowLib.SlowDataSourceState
+                         & stateSet SlowLib.DataSourceState
+                         & stateSet Lib.DataSourceState
         myEnv <- initEnv stateStore ()
-        _ <- function myEnv
+        (_, execTime) <- timeExec $ function myEnv
         stats <- readIORef $ statsRef myEnv
         return $ MeasuredGraph { nr = index
                                , levels = currLevels
                                , fetches = numFetches stats
                                , rounds = numRounds stats
+                               , time = execTime
                                }
 
     B.putStrLn (encode results)

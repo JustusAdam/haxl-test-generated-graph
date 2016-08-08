@@ -1,6 +1,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RebindableSyntax  #-}
-module SlowTestGraphs where
+module TestGraphs where
 
 import           Haxl.Core
 import           Haxl.Prelude

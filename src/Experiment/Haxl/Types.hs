@@ -30,6 +30,7 @@ data MeasuredGraph = MeasuredGraph
     , rounds  :: Int
     , fetches :: Int
     , genConf :: Maybe GenConf
+    , time :: Double
     } deriving (Show, Eq, Ord)
 
 
