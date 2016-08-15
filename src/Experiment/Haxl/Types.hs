@@ -18,6 +18,7 @@ data GenConf = MkGenConf
     , prctMaps       :: Maybe Float
     , prctIfs        :: Maybe Float
     , slowDataSource :: Maybe Bool
+    , inlineIf       :: Maybe Bool
     } deriving (Show, Eq, Ord)
 
 

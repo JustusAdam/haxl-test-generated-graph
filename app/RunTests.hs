@@ -53,6 +53,7 @@ baseConf = MkGenConf
     , prctFuns = Nothing
     , prctMaps = Nothing
     , slowDataSource = Nothing
+    , inlineIf = Nothing
     }
 
 
@@ -105,6 +106,9 @@ runOneFunc expName toGen = do
               ++ case slowDataSource conf of
                     Just True -> ["-S"]
                     _ -> []
+              ++ case inlineIf conf of
+                    Just True -> ["-i"]
+                    _ -> []
         generated <- filter (not . (`elem` [".", ".."])) <$> lsT genPath
         for generated $ \mname ->
             case Re.scan graphFilesRegex mname of
@@ -151,9 +155,10 @@ formatSeconds n
 
 basePrctConf = baseConf { numGraphs = 1, numLevels = 10 }
 
-if_conf = [ basePrctConf {lang="HaxlDoApp", seed=Just myseed, prctIfs=Just percentage}
+if_conf = [ basePrctConf {lang="HaxlDoApp", seed=Just myseed, prctIfs=Just percentage, numLevels=30, inlineIf=Just inline}
           | myseed <- [123456, 234567]
-          , percentage <- [0.1, 0.2, 0.3, 0.4]
+          , percentage <- [0.7, 0.8, 0.9, 1]
+          , inline <- [True, False]
           ]
 delayed = map (\c -> c { slowDataSource = Just True}) if_conf
 
