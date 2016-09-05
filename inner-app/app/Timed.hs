@@ -39,8 +39,8 @@ main = do
         let stateStore = stateSet SlowDataSourceState $ stateSet DataSourceState stateEmpty
         myEnv <- initEnv stateStore ()
         (_, execTime) <- timeExec $ function myEnv
-        return $ TimedGraph { levels = currLevels
-                            , time = execTime
-                            }
+        return TimedGraph { levels = currLevels
+                          , time = execTime
+                          }
 
     B.putStrLn (encode results)

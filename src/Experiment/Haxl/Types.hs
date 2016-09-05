@@ -2,9 +2,9 @@
 module Experiment.Haxl.Types where
 
 
+import           ClassyPrelude
 import           Data.Aeson.TH
 import           Data.Aeson.Types
-import           Data.Text
 import           Experiment.Haxl.Util
 
 
@@ -14,9 +14,10 @@ data GenConf = MkGenConf
     , numLevels      :: Int
     , numGraphs      :: Int
     , seed           :: Maybe Int
-    , prctFuns       :: Maybe Float
-    , prctMaps       :: Maybe Float
-    , prctIfs        :: Maybe Float
+    , prctFuns       :: Maybe Double
+    , prctMaps       :: Maybe Double
+    , prctIfs        :: Maybe Double
+    , prctSlow       :: Maybe Double
     , slowDataSource :: Maybe Bool
     , inlineIf       :: Maybe Bool
     } deriving (Show, Eq, Ord)
@@ -31,7 +32,7 @@ data MeasuredGraph = MeasuredGraph
     , rounds  :: Int
     , fetches :: Int
     , genConf :: Maybe GenConf
-    , time :: Double
+    , time    :: Double
     } deriving (Show, Eq, Ord)
 
 

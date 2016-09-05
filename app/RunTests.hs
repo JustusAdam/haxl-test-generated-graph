@@ -1,39 +1,19 @@
-{-# LANGUAGE BangPatterns         #-}
-{-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
-{-# LANGUAGE LambdaCase           #-}
 {-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE TupleSections        #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
 
-import           Control.Exception
-import           Control.Monad
+import           ClassyPrelude         hiding (FilePath, print, (<.>), (</>))
 import           Data.Aeson
 import qualified Data.ByteString.Lazy  as B
-import           Data.Foldable         (for_)
-import           Data.List             (stripPrefix)
-import           Data.Maybe
-import           Data.Monoid
-import           Data.String           (fromString)
-import qualified Data.Text             as T
-import           Data.Text.Encoding    (decodeUtf8, encodeUtf8)
-import           Data.Traversable      (for)
-import           Debug.Trace
+import           Data.Text.Format
 import           Experiment.Haxl.Types hiding (time)
-import           GHC.Generics
-import           Prelude               hiding (FilePath, (++))
-import           Shelly                as Shelly
-import           System.Environment    (getArgs)
-import           Text.Printf
+import           Shelly
 import qualified Text.Regex.PCRE.Heavy as Re
 import qualified Text.Regex.PCRE.Light as Re
 
 
-default (T.Text)
-
-(++) :: Monoid a => a -> a -> a
-(++) = mappend
+default (Text)
 
 graphFilesRegex :: Re.Regex
 graphFilesRegex = Re.compile "(run_test_level(\\d+)_(\\d+)).hs$" []
@@ -52,39 +32,49 @@ baseConf = MkGenConf
     , prctIfs = Nothing
     , prctFuns = Nothing
     , prctMaps = Nothing
+    , prctSlow = Nothing
     , slowDataSource = Nothing
     , inlineIf = Nothing
+    , lang="HaxlDoApp"
     }
 
 
-before :: T.Text
-before = "{-# LANGUAGE NoImplicitPrelude #-}\n\
-          \{-# LANGUAGE RebindableSyntax  #-}"
-after :: T.Text
-after = "import           Haxl.Core\n\
-         \import           Haxl.Prelude\n\
-         \import           Lib\n\
-         \import           Prelude      hiding ((>>), mapM)\n"
+tmplate :: Format
+tmplate = "{-# LANGUAGE NoImplicitPrelude #-}\n\
+          \{-# LANGUAGE RebindableSyntax  #-}\n\
+          \module {} where\n\
+          \\n\
+          \import           Haxl.Core\n\
+          \import           Haxl.Prelude\n\
+          \import           Lib\n\
+          \import           Prelude      hiding ((>>), mapM)\n\
+          \\n\
+          \\n\
+          \{}\n"
+slowTmplate :: Format
+slowTmplate = "{-# LANGUAGE NoImplicitPrelude #-}\n\
+              \{-# LANGUAGE RebindableSyntax  #-}\n\
+              \module {} where\n\
+              \\n\
+              \import           Haxl.Core\n\
+              \import           Haxl.Prelude\n\
+              \import           SlowLib\n\
+              \import           Prelude      hiding ((>>), mapM)\n\
+              \\n\
+              \\n\
+              \{}\n"
 
-
-slowAfter :: T.Text
-slowAfter = "import           Haxl.Core\n\
-            \import           Haxl.Prelude\n\
-            \import           SlowLib\n\
-            \import           Prelude      hiding ((>>), mapM)\n"
-
-
-mParam :: Show a => T.Text -> Maybe a -> [T.Text]
+mParam :: Show a => Text -> Maybe a -> [Text]
 mParam name = maybe [] (\v -> [name, showt v])
 
 
-showt :: Show a => a -> T.Text
-showt = T.pack . show
+showt :: Show a => a -> Text
+showt = pack . show
 
 
 runOneFunc :: FilePath -> [GenConf] -> Sh ()
 runOneFunc expName toGen = do
-    -- echo $ T.pack $ printf "Building and testing %i graphs" (graphsToGenerate * maxLevel)
+    print "Building and testing {} graphs\n" [sum $ map numGraphs toGen]
     let genPath = "generated"
     ls genPath >>= mapM_ rm . filter (not . (`elem` [".", ".."]))
     pream <- readfile "../resources/Preamble.hs"
@@ -92,7 +82,7 @@ runOneFunc expName toGen = do
         let useSlow = case slowDataSource conf of
                         Just True -> True
                         _ -> False
-        run
+        void $ run
             graphGenerationBinaryLocation
             $ [ "-L", lang conf
               , "-o", "generated/"
@@ -100,6 +90,7 @@ runOneFunc expName toGen = do
               , "-n", showt $ numGraphs conf
               ]
               ++ mParam "-s" (seed conf)
+              ++ mParam "--percentageslow" (prctSlow conf)
               ++ mParam "--percentagefuns" (prctFuns conf)
               ++ mParam "--percentagemaps" (prctMaps conf)
               ++ mParam "--percentageif" (prctIfs conf)
@@ -113,32 +104,33 @@ runOneFunc expName toGen = do
         for generated $ \mname ->
             case Re.scan graphFilesRegex mname of
                 [(_, [funname, level, index])] -> do
-                    content <- readfile $ fromString $ T.unpack mname
-                    let modname = "M" ++ funname ++ "_" ++ T.pack (show (globalIndex :: Int))
-                    let fullCode = T.intercalate "\n" [before, "module " ++ modname ++ " where\n", if useSlow then slowAfter else after, content]
-                    writefile (fromString $ T.unpack $ "generated/" ++ modname ++ ".hs") fullCode
-                    return $ Just $ (conf, ) $ (modname, funname, level, index :: T.Text)
+                    content <- readfile $ fromString $ unpack mname
+                    let modname = "M" ++ funname ++ "_" ++ pack (show (globalIndex :: Int))
+                    let fullCode = format (if useSlow then slowTmplate else tmplate) (modname, content)
+                    writefile (fromString $ unpack $ "generated/" ++ modname ++ ".hs") (toStrict fullCode)
+                    return $ Just (conf, (modname, funname, level, index :: Text))
                 _ -> return Nothing
         )
-    let imports = T.intercalate "\n" $ map (\(modname, _, _, _) -> "import qualified " ++ modname) functions
-    let allTests :: T.Text
-        allTests =
-            "allTests :: [(Env () -> IO Int, Int, Int)]\n"
-            <> "allTests = [(" ++ T.intercalate "), (" (map (\(modname, name, level, index) -> T.intercalate "," [modname ++ "." ++ name, level, index]) functions) ++ ")]"
-    let fullContent = T.intercalate "\n" [pream, imports, allTests]
+    let imports = intercalate "\n" $ map (\(modname, _, _, _) -> "import qualified " ++ modname) functions
+    let allTests = toStrict $ format
+            "allTests :: [(Env () -> IO Int, Int, Int)]\n\
+            \allTests = [({})]" [intercalate "), (" (map (\(modname, name, level, index) -> intercalate "," [modname ++ "." ++ name, level, index]) functions)]
+    let fullContent = intercalate "\n" [pream, imports, allTests]
     writefile (genPath </> "TestGraphs.hs") fullContent
 
     -- echo $ T.pack $ printf "Generated %i graphs in %s" (graphsToGenerate * maxLevel) (formatSeconds $ ceiling generationTime)
     (compilationTime, _) <- time $ run "stack" ["build"]
-    echo $ T.pack $ printf "Compiled test program in %s" (formatSeconds $ ceiling compilationTime)
-    rawData <- run "stack" ["exec", "inner-app-exe"]
+    print "Compiled test program in {}\n" [formatSeconds $ ceiling compilationTime]
+    (runTime, rawData) <- time $ run "stack" ["exec", "inner-app-exe"]
 
     let jsonData = fromMaybe (error "json unreadable") $ decode $ B.fromStrict $ encodeUtf8 rawData
 
     let withPercent = map (\(mg, conf) -> mg { genConf = Just conf } ) (zip jsonData confs)
 
+    print "Writing results to {}\n" [show $ outputLocation </> expName <.> "json"]
+
     writefile (outputLocation </> expName <.> "json") (decodeUtf8 $ B.toStrict $ encode withPercent)
-    -- echo $ T.pack $ printf "Ran program in %s" (formatSeconds $ ceiling runTime)
+    print "Ran program in {}\n" [formatSeconds $ ceiling runTime]
 
 
 formatSeconds :: Int -> String
@@ -153,27 +145,37 @@ formatSeconds n
         formatHours :: Int -> String
         formatHours = (++ " hours" ) . show
 
+basePrctConf :: GenConf
 basePrctConf = baseConf { numGraphs = 1, numLevels = 10 }
 
+if_conf :: [GenConf]
 if_conf = [ basePrctConf {lang="HaxlDoApp", seed=Just myseed, prctIfs=Just percentage, numLevels=30, inlineIf=Just inline}
           | myseed <- [123456, 234567]
           , percentage <- [0.7, 0.8, 0.9, 1]
           , inline <- [True, False]
           ]
+delayed :: [GenConf]
 delayed = map (\c -> c { slowDataSource = Just True}) if_conf
 
+mapConfs :: [GenConf]
+mapConfs = [ basePrctConf { lang="HaxlDoApp", seed=Just myseed, prctMaps=Just percentage, numLevels=10}
+           | myseed <- [123456, 234567]
+           , percentage <- [0.1, 0.15, 0.2, 0.25, 0.275, 0.3, 0.325, 0.375, 0.35]
+           ]
 
+
+experiments :: [(Text, Sh ())]
 experiments =
     [ ("if", runOneFunc "haskell-if" if_conf)
     , ("if-delayed", runOneFunc "haskell-if-delayed" delayed)
-    , ("map", runOneFunc "haskell-map" [ basePrctConf { lang="HaxlDoApp", seed=Just myseed, prctMaps=Just percentage}
-                                       | myseed <- [123456, 234567]
-                                       , percentage <- [0.1, 0.2, 0.3, 0.4]
-                                       ])
+    , ("map", runOneFunc "haskell-map" mapConfs)
     , ("func",  runOneFunc "haskell-func" [ basePrctConf { lang="HaxlDoApp", seed=Just myseed, prctFuns=Just percentage}
                                           | myseed <- [123456, 234567]
                                           , percentage <- [0.1, 0.2, 0.3, 0.4]
                                           ])
+    , ("temp", runOneFunc "temp" $ return basePrctConf { numLevels = 5, prctMaps = Just 0.6, seed = Just 123456 } )
+    , ("vanilla", runOneFunc "haskell-vanilla" $ return baseConf { numLevels = 20, numGraphs = 100, seed = Just 123456 })
+    , ("map-primer", runOneFunc "haskell-map-primer" (map (\cfg@(MkGenConf{prctMaps=prct}) -> cfg {prctMaps = Nothing, prctFuns=prct}) mapConfs))
     , ("all", mapM_ snd (filter ((/= "all") . fst) experiments))
     ]
 
@@ -187,9 +189,9 @@ main = do
         mkdir_p outputLocation
         mkdir_p "generated"
 
-        run "stack" ["install", "--only-dependencies"]
+        void $ run "stack" ["install", "--only-dependencies"]
 
         for_ types $ \exp ->
             case lookup exp experiments of
-                Nothing -> echo $ "No experiment " ++ T.pack exp ++ " defined"
+                Nothing -> echo $ "No experiment " ++ exp ++ " defined"
                 Just action -> action

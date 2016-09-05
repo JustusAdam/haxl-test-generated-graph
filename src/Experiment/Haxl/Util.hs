@@ -2,8 +2,8 @@
 module Experiment.Haxl.Util where
 
 
+import           ClassyPrelude
 import           Data.Aeson.Types
-import           Data.List        (stripPrefix)
 
 
 rewritePrefixes :: [(String, String)] -> (String -> String) -> String -> String

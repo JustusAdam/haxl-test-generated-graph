@@ -21,6 +21,12 @@ library
   build-depends:       base
                      , aeson
                      , text
+                     , classy-prelude
+                     , text-format
+  default-extensions:  NoImplicitPrelude
+                     , OverloadedStrings
+                     , TupleSections
+                     , TypeFamilies
 
 executable haxl-test-generated-graph-exe
   hs-source-dirs:      app
@@ -34,7 +40,13 @@ executable haxl-test-generated-graph-exe
                      , pcre-heavy
                      , bytestring
                      , haxl-test-generated-graph
+                     , classy-prelude
+                     , text-format
   default-language:    Haskell2010
+  default-extensions:  NoImplicitPrelude
+                     , OverloadedStrings
+                     , TupleSections
+                     , TypeFamilies
 
 source-repository head
   type:     git
