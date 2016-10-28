@@ -31,6 +31,7 @@ executable inner-app-exe
                      , bytestring
                      , aeson
                      , time
+                     , haxl-test-generated-graph
   default-language:    Haskell2010
 
 

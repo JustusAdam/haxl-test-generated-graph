@@ -20,6 +20,7 @@ data GenConf = MkGenConf
     , prctSlow       :: Maybe Double
     , slowDataSource :: Maybe Bool
     , inlineIf       :: Maybe Bool
+    , levelWidth     :: Maybe Int
     } deriving (Show, Eq, Ord)
 
 

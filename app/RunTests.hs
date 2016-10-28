@@ -36,12 +36,17 @@ baseConf = MkGenConf
     , slowDataSource = Nothing
     , inlineIf = Nothing
     , lang="HaxlDoApp"
+    , levelWidth = Nothing
     }
 
 
 tmplate :: Format
 tmplate = "{-# LANGUAGE NoImplicitPrelude #-}\n\
           \{-# LANGUAGE RebindableSyntax  #-}\n\
+          \{-# LANGUAGE CPP #-}\n\
+          \#if __GLASGOW_HASKELL__ >= 800\n\
+          \{-# LANGUAGE ApplicativeDo #-}\n\
+          \#endif\n\
           \module {} where\n\
           \\n\
           \import           Haxl.Core\n\
@@ -54,6 +59,10 @@ tmplate = "{-# LANGUAGE NoImplicitPrelude #-}\n\
 slowTmplate :: Format
 slowTmplate = "{-# LANGUAGE NoImplicitPrelude #-}\n\
               \{-# LANGUAGE RebindableSyntax  #-}\n\
+              \{-# LANGUAGE CPP #-}\n\
+              \#if __GLASGOW_HASKELL__ >= 800\n\
+              \{-# LANGUAGE ApplicativeDo #-}\n\
+              \#endif\n\
               \module {} where\n\
               \\n\
               \import           Haxl.Core\n\
@@ -72,8 +81,8 @@ showt :: Show a => a -> Text
 showt = pack . show
 
 
-runOneFunc :: FilePath -> [GenConf] -> Sh ()
-runOneFunc expName toGen = do
+prepareOneFunc :: FilePath -> [GenConf] -> Sh [GenConf]
+prepareOneFunc expName toGen = do
     print "Building and testing {} graphs\n" [sum $ map numGraphs toGen]
     let genPath = "generated"
     ls genPath >>= mapM_ rm . filter (not . (`elem` [".", ".."]))
@@ -100,6 +109,7 @@ runOneFunc expName toGen = do
               ++ case inlineIf conf of
                     Just True -> ["-i"]
                     _ -> []
+              ++ mParam "--levelwidth" (levelWidth conf)
         generated <- filter (not . (`elem` [".", ".."])) <$> lsT genPath
         for generated $ \mname ->
             case Re.scan graphFilesRegex mname of
@@ -117,14 +127,22 @@ runOneFunc expName toGen = do
             \allTests = [({})]" [intercalate "), (" (map (\(modname, name, level, index) -> intercalate "," [modname ++ "." ++ name, level, index]) functions)]
     let fullContent = intercalate "\n" [pream, imports, allTests]
     writefile (genPath </> "TestGraphs.hs") fullContent
+    return confs
 
+
+runOneFunc :: FilePath -> [GenConf] -> Sh ()
+runOneFunc expName toGen = do
+    confs <- prepareOneFunc expName toGen
     -- echo $ T.pack $ printf "Generated %i graphs in %s" (graphsToGenerate * maxLevel) (formatSeconds $ ceiling generationTime)
     (compilationTime, _) <- time $ run "stack" ["build"]
     print "Compiled test program in {}\n" [formatSeconds $ ceiling compilationTime]
     (runTime, rawData) <- time $ run "stack" ["exec", "inner-app-exe"]
+    outputResults rawData expName runTime confs
 
+
+outputResults rawData expName runTime confs = do
     let jsonData = fromMaybe (error "json unreadable") $ decode $ B.fromStrict $ encodeUtf8 rawData
-
+    
     let withPercent = map (\(mg, conf) -> mg { genConf = Just conf } ) (zip jsonData confs)
 
     print "Writing results to {}\n" [show $ outputLocation </> expName <.> "json"]
@@ -145,15 +163,27 @@ formatSeconds n
         formatHours :: Int -> String
         formatHours = (++ " hours" ) . show
 
+
+ghc8 :: FilePath -> [GenConf] -> Sh ()
+ghc8 name toGen = do
+    confs <- prepareOneFunc name toGen
+    -- echo $ T.pack $ printf "Generated %i graphs in %s" (graphsToGenerate * maxLevel) (formatSeconds $ ceiling generationTime)
+    void $ run "stack" ["install", "--only-dependencies", "--resolver", "nightly-2016-10-26"]
+    (compilationTime, _) <- time $ run "stack" ["build", "--resolver", "nightly-2016-10-26"]
+    print "Compiled test program in {}\n" [formatSeconds $ ceiling compilationTime]
+    (runTime, rawData) <- time $ run "stack" ["exec", "inner-app-exe"]
+    outputResults rawData name runTime confs
+
+
 basePrctConf :: GenConf
 basePrctConf = baseConf { numGraphs = 1, numLevels = 10 }
 
 if_conf :: [GenConf]
-if_conf = [ basePrctConf {lang="HaxlDoApp", seed=Just myseed, prctIfs=Just percentage, numLevels=30, inlineIf=Just inline}
-          | myseed <- [123456, 234567]
-          , percentage <- [0.7, 0.8, 0.9, 1]
-          , inline <- [True, False]
+if_conf = [ basePrctConf {lang="HaxlDoApp", seed=Just myseed, prctIfs=Just percentage, numLevels=20, inlineIf = Just True, levelWidth = Just 4}
+          | myseed <- [123456, 234567, 111111, 67890, 556554, 300909]
+          , percentage <- [0.7, 0.725 .. 1]
           ]
+
 delayed :: [GenConf]
 delayed = map (\c -> c { slowDataSource = Just True}) if_conf
 
@@ -162,6 +192,9 @@ mapConfs = [ basePrctConf { lang="HaxlDoApp", seed=Just myseed, prctMaps=Just pe
            | myseed <- [123456, 234567]
            , percentage <- [0.1, 0.15, 0.2, 0.25, 0.275, 0.3, 0.325, 0.375, 0.35]
            ]
+
+
+vanillaConf = baseConf { numLevels = 20, numGraphs = 400, seed = Just 12345 }
 
 
 experiments :: [(Text, Sh ())]
@@ -174,9 +207,12 @@ experiments =
                                           , percentage <- [0.1, 0.2, 0.3, 0.4]
                                           ])
     , ("temp", runOneFunc "temp" $ return basePrctConf { numLevels = 5, prctMaps = Just 0.6, seed = Just 123456 } )
-    , ("vanilla", runOneFunc "haskell-vanilla" $ return baseConf { numLevels = 20, numGraphs = 100, seed = Just 123456 })
+    , ("vanilla", runOneFunc "haskell-vanilla" [vanillaConf])
+    , ("monad", runOneFunc "haskell-vanilla-monad" [vanillaConf { lang = "HaxlDo" }])
     , ("map-primer", runOneFunc "haskell-map-primer" (map (\cfg@(MkGenConf{prctMaps=prct}) -> cfg {prctMaps = Nothing, prctFuns=prct}) mapConfs))
     , ("all", mapM_ snd (filter ((/= "all") . fst) experiments))
+    , ("ghc8", ghc8 "ghc8" [vanillaConf])
+    , ("ghc8-app", ghc8 "ghc8-app" [vanillaConf { lang = "HaxlDoApp"}])
     ]
 
 

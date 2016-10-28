@@ -1,38 +1,23 @@
-{-# LANGUAGE DeriveGeneric #-}
 module Main where
 
 import           Control.Exception
 import           Data.Aeson
-import           Data.Aeson.Types
 import qualified Data.ByteString.Lazy.Char8 as B
 import           Data.Function              ((&))
 import           Data.IORef
 import           Data.Time
 import           Data.Traversable
-import           GHC.Generics
 import           Haxl.Core
 import qualified Lib
 import qualified SlowLib
 import           System.CPUTime
 import           TestGraphs
 import           Text.Printf
+import Experiment.Haxl.Types
 
-
-
-data MeasuredGraph = MeasuredGraph
-    { nr      :: Int
-    , levels  :: Int
-    , rounds  :: Int
-    , fetches :: Int
-    , time    :: Double
-    } deriving (Generic, Show, Eq, Ord)
 
 
 type MeasuredGraphs = [MeasuredGraph]
-
-
-instance ToJSON MeasuredGraph where
-    toJSON = genericToJSON $ defaultOptions { fieldLabelModifier = camelTo2 '_' }
 
 
 timeExec :: IO t -> IO (t, Double)
@@ -53,11 +38,12 @@ main = do
         myEnv <- initEnv stateStore ()
         (_, execTime) <- timeExec $ function myEnv
         stats <- readIORef $ statsRef myEnv
-        return MeasuredGraph { nr = index
+        return MeasuredGraph { nr = Just index
                              , levels = currLevels
                              , fetches = numFetches stats
                              , rounds = numRounds stats
                              , time = execTime
-                            }
+                             , genConf = Nothing
+                             }
 
     B.putStrLn (encode results)
